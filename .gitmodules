@@ -1,0 +1,3 @@
+[submodule "docs/octagonl-platform-infra"]
+	path = docs/octagonl-platform-infra
+	url = https://github.com/Galacticnaut/octagonl-platform-infra.git

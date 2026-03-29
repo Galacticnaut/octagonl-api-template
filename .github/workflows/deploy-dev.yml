@@ -1,0 +1,57 @@
+# Deploy to Dev — Docker → ACR → Container Apps
+# Required GitHub Environment secrets (app-azure-dev):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#   ACR_LOGIN_SERVER
+name: Deploy Dev
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+# TODO: Update these values for your app
+env:
+  CONTAINER_APP: ca-octagonl-APPNAME-dev-api
+  RESOURCE_GROUP: rg-octagonl-APPNAME-dev
+  IMAGE_NAME: octagonl-APPNAME-api
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy (Dev)
+    runs-on: ubuntu-latest
+    environment: app-azure-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ secrets.ACR_LOGIN_SERVER }}
+
+      - name: Build & push Docker image
+        run: |
+          TAG=${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker build -t $TAG .
+          docker push $TAG
+
+      - name: Deploy to Container Apps
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name ${{ env.CONTAINER_APP }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - uses: azure/CLI@v2
+        if: always()
+        with:
+          inlineScript: az logout
