@@ -7,7 +7,7 @@ This is an Octagonl platform API service built with Express + TypeScript. Follow
 - Authentication: validates JWTs issued by Microsoft Entra External ID (jose + JWKS)
 - Deploys to Azure Container Apps via Docker → ACR → GitHub Actions with OIDC federation
 - Database: PostgreSQL via Drizzle ORM
-- Platform docs are in the `docs/octagonl-platform-infra/` git submodule
+- Platform docs are in the `docs/octagonl-docs/` git submodule
 
 ## Authentication Rules
 - **Use `oid` claim, NOT `sub`** — `sub` is pairwise in Microsoft Entra (differs between app registrations). `oid` (Object ID) is stable across all Octagonl apps. Store it as `entra_oid`.
