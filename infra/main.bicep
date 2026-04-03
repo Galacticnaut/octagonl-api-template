@@ -1,5 +1,6 @@
 // ──────────────────────────────────────────────────────────
 // Octagonl API Template – Container Apps + ACR + PostgreSQL
+// Uses shared infrastructure modules from octagonl-shared
 // ──────────────────────────────────────────────────────────
 targetScope = 'resourceGroup'
 
@@ -14,70 +15,81 @@ param env string
 param location string = resourceGroup().location
 
 @description('PostgreSQL administrator login name')
-param pgAdminLogin string = 'pgadmin'
+param administratorLogin string = 'pgadmin'
 
 @description('PostgreSQL administrator password')
 @secure()
-param pgAdminPassword string
+param administratorLoginPassword string
 
-var prefix = '${appName}-${env}'
+var baseName = '${appName}-${env}'
+var tags = {
+  app: appName
+  environment: env
+  managedBy: 'bicep'
+}
 
 // ── Monitoring ─────────────────────────────────────
-module monitoring './modules/monitoring.bicep' = {
-  name: '${prefix}-monitoring'
+module monitoring '../shared/infra/modules/monitoring.bicep' = {
+  name: '${baseName}-monitoring'
   params: {
-    prefix: prefix
+    baseName: baseName
     location: location
+    tags: tags
   }
 }
 
 // ── ACR ────────────────────────────────────────────
-module acr './modules/acr.bicep' = {
-  name: '${prefix}-acr'
+module acr '../shared/infra/modules/acr.bicep' = {
+  name: '${baseName}-acr'
   params: {
-    prefix: prefix
+    baseName: baseName
     location: location
+    tags: tags
   }
 }
 
 // ── Key Vault ──────────────────────────────────────
-module keyvault './modules/keyvault.bicep' = {
-  name: '${prefix}-kv'
+module keyvault '../shared/infra/modules/keyvault.bicep' = {
+  name: '${baseName}-kv'
   params: {
-    prefix: prefix
+    baseName: baseName
     location: location
+    tags: tags
   }
 }
 
 // ── PostgreSQL ─────────────────────────────────────
-module postgres './modules/postgres.bicep' = {
-  name: '${prefix}-pg'
+module postgres '../shared/infra/modules/postgres.bicep' = {
+  name: '${baseName}-pg'
   params: {
-    prefix: prefix
+    baseName: baseName
     location: location
-    adminLogin: pgAdminLogin
-    adminPassword: pgAdminPassword
+    tags: tags
+    administratorLogin: administratorLogin
+    administratorLoginPassword: administratorLoginPassword
+    databaseName: '${appName}_db'
   }
 }
 
 // ── Container Apps ─────────────────────────────────
-module containerApps './modules/container-apps.bicep' = {
-  name: '${prefix}-ca'
+module containerApps '../shared/infra/modules/container-apps.bicep' = {
+  name: '${baseName}-ca'
   params: {
-    prefix: prefix
+    baseName: baseName
     location: location
-    logAnalyticsId: monitoring.outputs.workspaceId
+    tags: tags
+    logAnalyticsId: monitoring.outputs.logAnalyticsId
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
-    keyVaultUri: keyvault.outputs.vaultUri
+    keyVaultUri: keyvault.outputs.keyVaultUri
     acrLoginServer: acr.outputs.acrLoginServer
   }
 }
 
 // ── RBAC ───────────────────────────────────────────
-module roles './modules/role-assignments.bicep' = {
-  name: '${prefix}-roles'
+module roles '../shared/infra/modules/role-assignments.bicep' = {
+  name: '${baseName}-roles'
   params: {
-    keyVaultId: keyvault.outputs.vaultId
+    keyVaultId: keyvault.outputs.keyVaultId
     acrId: acr.outputs.acrId
     apiPrincipalId: containerApps.outputs.apiPrincipalId
   }
@@ -85,8 +97,8 @@ module roles './modules/role-assignments.bicep' = {
 
 // ── Outputs ────────────────────────────────────────
 output acrLoginServer string = acr.outputs.acrLoginServer
-output containerAppName string = containerApps.outputs.containerAppName
-output containerAppFqdn string = containerApps.outputs.containerAppFqdn
-output keyVaultUri string = keyvault.outputs.vaultUri
-output postgresHost string = postgres.outputs.host
-output logAnalyticsWorkspaceId string = monitoring.outputs.workspaceId
+output containerAppName string = containerApps.outputs.apiAppName
+output containerAppFqdn string = containerApps.outputs.apiAppFqdn
+output keyVaultUri string = keyvault.outputs.keyVaultUri
+output postgresHost string = postgres.outputs.postgresFqdn
+output logAnalyticsWorkspaceId string = monitoring.outputs.logAnalyticsId
