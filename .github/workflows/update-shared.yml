@@ -1,0 +1,102 @@
+# Auto-update octagonl-shared submodule
+# Copy this file to your app's .github/workflows/update-shared.yml
+#
+# This workflow:
+# 1. Runs weekly (Monday 9am UTC) or on manual trigger
+# 2. Fetches the latest tagged release of octagonl-shared
+# 3. Validates Bicep still compiles
+# 4. Opens a PR if changes detected
+
+name: Update Shared
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Weekly Monday 9am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update octagonl-shared
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Get current version
+        id: current
+        run: |
+          cd shared
+          echo "version=$(git describe --tags --always 2>/dev/null || echo 'unknown')" >> $GITHUB_OUTPUT
+
+      - name: Update to latest tag
+        id: update
+        run: |
+          cd shared
+          git fetch --tags origin
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST" ]; then
+            echo "No tags found, using main"
+            git checkout origin/main
+            LATEST="main"
+          else
+            git checkout "$LATEST"
+          fi
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: Install Bicep CLI
+        run: |
+          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x bicep
+          sudo mv bicep /usr/local/bin/
+
+      - name: Validate Bicep
+        run: |
+          if [ -f infra/main.bicep ]; then
+            bicep build infra/main.bicep --stdout > /dev/null
+            echo "Bicep validation passed"
+          else
+            echo "No infra/main.bicep found, skipping validation"
+          fi
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet shared; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update octagonl-shared to ${{ steps.update.outputs.version }}"
+          title: "chore: Update octagonl-shared to ${{ steps.update.outputs.version }}"
+          body: |
+            Updates the `shared` submodule from `${{ steps.current.outputs.version }}` to `${{ steps.update.outputs.version }}`.
+
+            ## Changes
+            See the [octagonl-shared CHANGELOG](https://github.com/Galacticnaut/octagonl-shared/blob/main/CHANGELOG.md) for details.
+
+            ## Validation
+            - [x] Bicep modules compile successfully
+
+            ---
+            *This PR was automatically created by the Update Shared workflow.*
+          branch: chore/update-shared
+          delete-branch: true
+          labels: |
+            dependencies
+            automated
+
+      - name: No changes
+        if: steps.changes.outputs.changed == 'false'
+        run: echo "Already up to date with ${{ steps.current.outputs.version }}"
