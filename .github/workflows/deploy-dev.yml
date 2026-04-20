@@ -43,7 +43,7 @@ jobs:
           docker push $TAG
 
       - name: Deploy to Container Apps
-        uses: azure/CLI@v2
+        uses: azure/CLI@v3
         with:
           inlineScript: |
             az containerapp update \
@@ -51,7 +51,7 @@ jobs:
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --image ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-      - uses: azure/CLI@v2
+      - uses: azure/CLI@v3
         if: always()
         with:
           inlineScript: az logout
